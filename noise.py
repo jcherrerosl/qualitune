@@ -1,38 +1,33 @@
 import numpy as np
-from scipy.signal import find_peaks
 import librosa
 
-def calculate_noise_ratio(y, sr, n_fft=16384, min_peak_height=0.05, freq_range=(50, 16000)):
-    # Espectro medio de toda la canción: STFT con ventana Hann y promedio
-    # de magnitudes en el tiempo (antes solo se analizaban las primeras
-    # n_fft muestras, unos 0,37 s, porque rfft(n=n_fft) recorta la señal)
-    S = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=n_fft // 2, window='hann'))
-    spectrum = S.mean(axis=1)
+
+def calculate_snr_db(y, sr, n_fft=4096, percentile=10, freq_range=(50, 15000), max_db=90.0):
+    """
+    Estima la relación señal/ruido (dB) frente a un ruido de fondo de banda
+    ancha (hiss, ruido de grabación) mediante "mínimos estadísticos":
+
+    - Para cada frecuencia se toma su potencia en los momentos más silenciosos
+      (percentil bajo en el tiempo).
+    - El ruido de fondo es la mediana de esos mínimos entre frecuencias: las
+      frecuencias ocupadas por la música son minoría y no lo sesgan, mientras
+      que el ruido de banda ancha está en todas.
+    - La señal es la potencia media total.
+
+    Valores altos = canción limpia. Se ignoran silencios y fundidos para que
+    no cuenten como ruido. No detecta zumbidos de banda estrecha (50 Hz, etc.).
+    """
+    S = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=n_fft // 4)) ** 2
     freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
-    
-    # Limitar al rango de frecuencias relevante
-    freq_mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
-    spectrum = spectrum[freq_mask]
-    freqs = freqs[freq_mask]
-    
-    # Detectar picos armónicos
-    peaks, _ = find_peaks(spectrum, height=np.max(spectrum)*min_peak_height, distance=10)
-    
-    # Crear máscara para componentes armónicos (picos + vecindario)
-    harmonic_mask = np.zeros_like(spectrum, dtype=bool)
-    peak_width = 8  # bins de frecuencia a cada lado del pico
-    for p in peaks:
-        start = max(0, p - peak_width)
-        end = min(len(spectrum), p + peak_width)
-        harmonic_mask[start:end] = True
-    
-    # Calcular energías
-    harmonic_energy = np.sum(spectrum[harmonic_mask])
-    noise_energy = np.sum(spectrum[~harmonic_mask])
-    total_energy = harmonic_energy + noise_energy
-    
-    # Evitar división por cero
-    if total_energy == 0:
-        return 0.0
-    
-    return noise_energy / total_energy
+    S = S[(freqs >= freq_range[0]) & (freqs <= freq_range[1])]
+
+    frame_db = librosa.power_to_db(S.sum(axis=0), ref=np.max)
+    S = S[:, frame_db > -60]
+    if S.size == 0:
+        return np.nan
+
+    floor = np.median(np.percentile(S, percentile, axis=1)) * S.shape[0]
+    signal = S.mean(axis=1).sum()
+    if floor <= 0:
+        return max_db
+    return float(min(10 * np.log10(signal / floor), max_db))

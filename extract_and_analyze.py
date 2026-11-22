@@ -57,7 +57,7 @@ def process_csv(input_csv, output_csv):
                     row_data = {
                         'title': title,
                         'url': url,
-                        'noise_ratio': features.get('noise_ratio', np.nan),
+                        'snr_db': features.get('snr_db', np.nan),
                         'error': features.get('error')
                     }
 
@@ -68,13 +68,14 @@ def process_csv(input_csv, output_csv):
 
                     # Dynamics
                     dyn = features.get('dynamics') or {}
-                    for key in ['lufs', 'rms', 'crest_factor', 'clipping_ratio']:
+                    for key in ['lufs', 'rms', 'true_peak_db', 'crest_factor', 'crest_factor_db', 'clipping_ratio']:
                         row_data[key] = dyn.get(key, np.nan)
 
                     # Tuning
                     tun = features.get('tuning') or {}
                     row_data['pitch'] = tun.get('pitch')
-                    row_data['confidence'] = tun.get('confidence', np.nan)
+                    row_data['voiced_ratio'] = tun.get('voiced_ratio', np.nan)
+                    row_data['cents_dev'] = tun.get('cents_dev', np.nan)
 
                     output_data.append(row_data)
 

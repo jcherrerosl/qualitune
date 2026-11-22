@@ -1,29 +1,26 @@
 import librosa
 import numpy as np
 
+BANDS = {
+    "sub_bass": (20, 60),
+    "bass": (60, 120),
+    "low_mids": (120, 300),
+    "mids": (300, 2000),
+    "highs": (2000, 7500),
+    "air": (7500, 15000),
+}
+
+
 def analyze_bands(y, sr):
     try:
-        def band_energy(y, sr, fmin, fmax):
-            S = np.abs(librosa.stft(y))
-            freqs = librosa.fft_frequencies(sr=sr)
-            band = np.logical_and(freqs >= fmin, freqs <= fmax)
-            return np.mean(S[band, :]) if np.any(band) else 0
-
-        sub_bass = band_energy(y, sr, 20, 60)
-        bass = band_energy(y, sr, 60, 120)
-        low_mids = band_energy(y, sr, 120, 300)
-        mids = band_energy(y, sr, 300, 2000)
-        highs = band_energy(y, sr, 2000, 7500)
-        air = band_energy(y, sr, 7500, 15000)
-
-        return {
-            "sub_bass": round(sub_bass, 4),
-            "bass": round(bass, 4),
-            "low_mids": round(low_mids, 4),
-            "mids": round(mids, 4),
-            "highs": round(highs, 4),
-            "air": round(air, 4),
-        }
+        # Una sola STFT para todas las bandas (antes se calculaba 6 veces)
+        S = np.abs(librosa.stft(y))
+        freqs = librosa.fft_frequencies(sr=sr)
+        result = {}
+        for name, (fmin, fmax) in BANDS.items():
+            band = (freqs >= fmin) & (freqs <= fmax)
+            result[name] = round(float(np.mean(S[band, :])), 4) if np.any(band) else 0.0
+        return result
 
     except Exception as e:
-        raise RuntimeError(f"Error analyzing {filepath}: {e}")
+        raise RuntimeError(f"Error analyzing frequency bands: {e}")
