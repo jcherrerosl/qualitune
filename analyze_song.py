@@ -1,11 +1,13 @@
 from frequencies import analyze_bands
 from dynamics import analyze_dynamics
-from noise import calculate_noise_ratio
+from noise import calculate_snr_db
 from tuning import separate_audio, check_tune
 import librosa
 import numpy as np
 
-def analyze_song(filepath, target_sr=44100):
+def analyze_song(filepath, target_sr=None):
+    # target_sr=None conserva la frecuencia original: resamplear deforma los
+    # picos y los techos planos del clipping
     results = {}
 
     try:
@@ -15,8 +17,8 @@ def analyze_song(filepath, target_sr=44100):
             'error': f"Error loading audio: {e}",
             'frequency_bands': None,
             'dynamics': None,
-            'noise_ratio': np.nan,
-            'tuning': {'pitch': None, 'confidence': np.nan},
+            'snr_db': np.nan,
+            'tuning': {'pitch': None, 'voiced_ratio': np.nan, 'cents_dev': np.nan},
             'duration': 0,
         }
 
@@ -36,27 +38,17 @@ def analyze_song(filepath, target_sr=44100):
 
     # Ruido
     try:
-        results['noise_ratio'] = calculate_noise_ratio(y, sr)
+        results['snr_db'] = calculate_snr_db(y, sr)
     except Exception as e:
-        results['noise_ratio'] = np.nan
+        results['snr_db'] = np.nan
 
-    # Afinación vocal
+    # Afinación vocal (requiere Spleeter; si no está, se omite)
+    empty_tuning = {'pitch': None, 'voiced_ratio': np.nan, 'cents_dev': np.nan}
     try:
         vocals, sr_vocals = separate_audio(y, sr)
-        tuning_results = check_tune(vocals, sr_vocals)
-
-        if isinstance(tuning_results, dict):
-            results['tuning'] = tuning_results
-        else:
-            try:
-                results['tuning'] = {
-                    'pitch': tuning_results.split("Note: ")[1].split(",")[0],
-                    'confidence': float(tuning_results.split("Confidence: ")[1])
-                }
-            except:
-                results['tuning'] = {'pitch': None, 'confidence': np.nan}
+        results['tuning'] = check_tune(vocals, sr_vocals) if vocals is not None else empty_tuning
     except Exception as e:
-        results['tuning'] = {'pitch': None, 'confidence': np.nan}
+        results['tuning'] = empty_tuning
 
     results['error'] = None
     return results
