@@ -8,7 +8,7 @@ def rate_song(filepath):
     """
     try:
         analysis = analyze_song(filepath)
-        if 'error' in analysis:
+        if analysis.get('error'):
             return {
                 'score': 0,
                 'error': analysis['error'],
@@ -112,12 +112,13 @@ def rate_song(filepath):
         # 5. Métricas adicionales (20 puntos máximo)
         max_score += 20
         # Duración (ejemplo: entre 2 y 10 minutos)
-        duration = analysis.get('duration', 0)
+        duration = int(analysis.get('duration') or 0)
+        mins, secs = divmod(duration, 60)
         if 120 <= duration <= 600:
-            score += 5
-            details.append(f"✅ Duración adecuada ({duration//60}:{duration%60:02d})")
+            score += 20
+            details.append(f"✅ Duración adecuada ({mins}:{secs:02d})")
         else:
-            details.append(f"⚠️ Duración atípica ({duration//60}:{duration%60:02d})")
+            details.append(f"⚠️ Duración atípica ({mins}:{secs:02d})")
 
         # Puedes añadir más criterios aquí
 

@@ -44,57 +44,70 @@ st.caption("Automated technical analysis for editorial filtering")
 
 input_url = st.text_input("Enter a YouTube URL (playlist or song):", "")
 
+def analyze_url(url):
+    info = fetch_metadata(url)
+
+    urls = []
+    if info.get('_type') == 'playlist':
+        st.success(f"Playlist detected: {info.get('title', 'Untitled')} ({len(info['entries'])} tracks)")
+        for entry in info['entries']:
+            if entry and 'id' in entry:
+                urls.append(f"https://www.youtube.com/watch?v={entry['id']}")
+    else:
+        st.success("Single song detected")
+        urls.append(info['webpage_url'])
+
+    results = []
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        for i, track_url in enumerate(urls):
+            st.write(f"Analyzing {track_url} ({i+1}/{len(urls)})")
+            try:
+                mp3_path, title = download_audio_mp3(track_url, tmpdir)
+                result = rate_song(mp3_path)
+                results.append({
+                    "title": title,
+                    "rating": result["score"],
+                    "issues": ", ".join(result["details"]) if result.get("details") else (result.get("error") or "Unknown"),
+                    "url": track_url
+                })
+            except Exception as e:
+                st.warning(f"Skipping: {track_url}\nReason: {str(e)}")
+                results.append({
+                    "title": "Cannot analyze",
+                    "rating": 0,
+                    "issues": "Not playable or extractable",
+                    "url": track_url
+                })
+
+    return pd.DataFrame(results)
+
+
 if input_url:
     url = sanitize_youtube_url(input_url)
 
-    with st.spinner("Analyzing…"):
-        try:
-            info = fetch_metadata(url)
+    # Streamlit relanza el script en cada interacción (p. ej. al pulsar
+    # "Download"); se guardan los resultados para no volver a descargar y
+    # analizar todo.
+    if st.session_state.get("analyzed_url") != url:
+        with st.spinner("Analyzing…"):
+            try:
+                st.session_state["results"] = analyze_url(url)
+                st.session_state["analyzed_url"] = url
+            except Exception as e:
+                st.session_state.pop("results", None)
+                st.session_state.pop("analyzed_url", None)
+                st.error(f"Error during analysis: {e}")
 
-            urls = []
-            if info.get('_type') == 'playlist':
-                st.success(f"Playlist detected: {info.get('title', 'Untitled')} ({len(info['entries'])} tracks)")
-                for entry in info['entries']:
-                    if entry and 'id' in entry:
-                        urls.append(f"https://www.youtube.com/watch?v={entry['id']}")
-            else:
-                st.success("Single song detected")
-                urls.append(info['webpage_url'])
+    df = st.session_state.get("results")
+    if df is not None and st.session_state.get("analyzed_url") == url:
+        st.subheader("Results")
+        st.dataframe(df[["title", "rating", "issues"]], use_container_width=True)
 
-            results = []
-
-            with tempfile.TemporaryDirectory() as tmpdir:
-                for i, url in enumerate(urls):
-                    st.write(f"Analyzing {url} ({i+1}/{len(urls)})")
-                    try:
-                        mp3_path, title = download_audio_mp3(url, tmpdir)
-                        result = rate_song(mp3_path)
-                        results.append({
-                            "title": title,
-                            "rating": result["score"],
-                            "issues": ", ".join(result["details"]) if result.get("details") else "Unknown",
-                            "url": url
-                        })
-                    except Exception as e:
-                        st.warning(f"Skipping: {url}\nReason: {str(e)}")
-                        results.append({
-                            "title": "Cannot analyze",
-                            "rating": 0,
-                            "issues": "Not playable or extractable",
-                            "url": url
-                        })
-
-            df = pd.DataFrame(results)
-            st.subheader("Results")
-            st.dataframe(df[["title", "rating", "issues"]], use_container_width=True)
-
-            csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="Download results as CSV",
-                data=csv,
-                file_name="results.csv",
-                mime="text/csv"
-            )
-
-        except Exception as e:
-            st.error(f"Error during analysis: {e}")
+        csv = df.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download results as CSV",
+            data=csv,
+            file_name="results.csv",
+            mime="text/csv"
+        )

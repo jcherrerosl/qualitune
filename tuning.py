@@ -1,7 +1,6 @@
-from spleeter.separator import Separator
 import librosa
 import numpy as np
-import librosa.display
+import shutil
 import soundfile as sf
 import tempfile
 import os
@@ -17,6 +16,7 @@ def separate_audio(y, sr):
             sf.write(temp_path, y_resampled, 22050)
 
         output_dir = os.path.dirname(temp_path)
+        from spleeter.separator import Separator  # import diferido: Spleeter es opcional y pesado
         separator = Separator('spleeter:2stems')
         separator.separate_to_file(temp_path, output_dir)
 
@@ -28,10 +28,10 @@ def separate_audio(y, sr):
 
         vocals, _ = librosa.load(vocal_path, sr=22050)
 
-        # Limpieza
+        # Limpieza: Spleeter 2stems genera vocals.wav y accompaniment.wav,
+        # así que se borra la carpeta entera (os.rmdir fallaba al no estar vacía)
         os.remove(temp_path)
-        os.remove(vocal_path)
-        os.rmdir(os.path.dirname(vocal_path))
+        shutil.rmtree(os.path.dirname(vocal_path), ignore_errors=True)
 
         return vocals, 22050
 

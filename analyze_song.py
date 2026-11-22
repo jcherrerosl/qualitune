@@ -16,8 +16,11 @@ def analyze_song(filepath, target_sr=44100):
             'frequency_bands': None,
             'dynamics': None,
             'noise_ratio': np.nan,
-            'tuning': {'pitch': None, 'confidence': np.nan}
+            'tuning': {'pitch': None, 'confidence': np.nan},
+            'duration': 0,
         }
+
+    results['duration'] = len(y) / sr
 
     # Frecuencias
     try:

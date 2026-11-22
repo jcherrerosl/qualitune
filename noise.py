@@ -3,13 +3,12 @@ from scipy.signal import find_peaks
 import librosa
 
 def calculate_noise_ratio(y, sr, n_fft=16384, min_peak_height=0.05, freq_range=(50, 16000)):
-    # Aplicar ventana de Hann para reducir fugas espectrales
-    window = np.hanning(len(y))
-    y_windowed = y * window
-    
-    # Calcular FFT de toda la señal
-    spectrum = np.abs(np.fft.rfft(y_windowed, n=n_fft))
-    freqs = np.fft.rfftfreq(n_fft, 1/sr)
+    # Espectro medio de toda la canción: STFT con ventana Hann y promedio
+    # de magnitudes en el tiempo (antes solo se analizaban las primeras
+    # n_fft muestras, unos 0,37 s, porque rfft(n=n_fft) recorta la señal)
+    S = np.abs(librosa.stft(y, n_fft=n_fft, hop_length=n_fft // 2, window='hann'))
+    spectrum = S.mean(axis=1)
+    freqs = librosa.fft_frequencies(sr=sr, n_fft=n_fft)
     
     # Limitar al rango de frecuencias relevante
     freq_mask = (freqs >= freq_range[0]) & (freqs <= freq_range[1])
