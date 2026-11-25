@@ -10,10 +10,7 @@ INPUT_CSV = "songs.csv"
 OUTPUT_CSV = "reference_dataset.csv"
 
 def download_audio_mp3(url, out_dir):
-    ffmpeg_path = os.path.abspath("bin/ffmpeg")
-
     ydl_opts = {
-        'ffmpeg_location': ffmpeg_path,
         'format': 'bestaudio/best',
         'outtmpl': os.path.join(out_dir, '%(id)s.%(ext)s'),
         'postprocessors': [{
@@ -23,6 +20,10 @@ def download_audio_mp3(url, out_dir):
         }],
         'quiet': False
     }
+    # Usa un ffmpeg local en bin/ si existe; si no, el del sistema (PATH)
+    local_ffmpeg = os.path.abspath("bin/ffmpeg")
+    if os.path.exists(local_ffmpeg):
+        ydl_opts['ffmpeg_location'] = local_ffmpeg
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
